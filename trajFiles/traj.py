@@ -44,7 +44,7 @@ class Trajectory:
         return ref
 
     def desired_altitude_mpc(self, quad, idx, N_):
-        """获取z方向的状态和控制"""
+        """获取z方向的期望状态和控制"""
         z_ref_ = self.z_ref[idx:(idx + N_)]
         length = len(z_ref_)
         if length < N_:  # 如果当前获取的参考轨迹长度小于预测范围N_，则需要进行扩展
@@ -67,10 +67,7 @@ class Trajectory:
         return x_, u_
 
     def desired_position_mpc(self, quad, idx, N_, thrust):
-        # initial state / last state
-        x_ = np.zeros((N_ + 1, 4))
-        u_ = np.zeros((N_, 2))
-
+        """获取xy平面的期望状态和控制"""
         x_ref_ = self.x_ref[idx:(idx + N_)]
         y_ref_ = self.y_ref[idx:(idx + N_)]
         length = len(x_ref_)
@@ -98,15 +95,12 @@ class Trajectory:
         x_ = np.concatenate((np.array([[quad.pos[0], quad.pos[1], quad.dpos[0], quad.dpos[1]]]), x_), axis=0)
         u_ = np.array([phi_ref_, the_ref_]).T
 
-        # print(x_)
-        # print(u_)
+        # x_: (N_ + 1, 4) x位置，y位置，x速度，y速度
+        # u_: (N_, 2) 俯仰角，滚动角
         return x_, u_
 
     def desired_attitude_mpc(self, quad, idx, N_, phid, thed):
-        # initial state / last state
-        x_ = np.zeros((N_ + 1, 6))
-        u_ = np.zeros((N_, 3))
-
+        """获取无人机姿态的期望状态和控制"""
         phi_ref_ = phid
         the_ref_ = thed
 
@@ -139,6 +133,6 @@ class Trajectory:
             (np.array([[quad.ori[0], quad.ori[1], quad.ori[2], quad.dori[0], quad.dori[1], quad.dori[2]]]), x_), axis=0)
         u_ = np.array([tau_phi_ref_, tau_the_ref_, tau_psi_ref_]).T
 
-        # print(x_)
-        # print(u_)
+        # x_: (N_ + 1, 6) xyz方向的角度，xyz方向的角速度
+        # u_: (N_, 3) xyz方向的扭矩
         return x_, u_

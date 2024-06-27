@@ -78,7 +78,7 @@ class Quadrotor:
         self.ori[1] = min(max(self.ori[1], self.min_the), self.max_the)
 
     def updateConfiguration(self, thrust, tau_phi, tau_the, tau_psi, dt):
-        # Prepare the current state
+        # 获取当前状态
         phi = self.ori[0]
         the = self.ori[1]
         psi = self.ori[2]
@@ -87,7 +87,7 @@ class Quadrotor:
         dthe = self.dori[1]
         dpsi = self.dori[2]
 
-        # The dynamic equations
+        # 动力学模型
         thrust, tau_phi, tau_the, tau_psi = self.correctControl(thrust, tau_phi, tau_the, tau_psi)
         # ddx = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.cos(psi) + np.sin(phi)*np.sin(psi))
         # ddy = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.sin(psi) - np.sin(phi)*np.cos(psi))
@@ -102,7 +102,7 @@ class Quadrotor:
         ddpsi = (dphi * dthe * (self.Iz - self.Iy) + tau_psi) / self.Iz
         ddori = np.array([ddphi, ddthe, ddpsi])
 
-        # Update the quadrotor states
+        # 更新状态
         self.dpos = self.dpos + ddpos * dt
         self.dori = self.dori + ddori * dt
         self.correctDotState()
@@ -111,7 +111,7 @@ class Quadrotor:
         self.ori = self.ori + self.dori * dt
         self.correctState()
 
-        # Add current configuration to paths
+        # 记录状态
         self.path.append(np.append(self.pos, self.ori))
 
         # 欧拉角 -> 四元数
