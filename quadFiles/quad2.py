@@ -55,6 +55,8 @@ class Quadrotor:
         self.max_tau_psi = 10.0
         self.min_tau_psi = -self.max_tau_psi
 
+        print('无人机对象初始化成功')
+
     def correctControl(self, thrust, tau_phi, tau_the, tau_psi):
         thrust = min(max(thrust, self.min_thrust), self.max_thrust)
         tau_phi = min(max(tau_phi, self.min_tau_phi), self.max_tau_phi)
