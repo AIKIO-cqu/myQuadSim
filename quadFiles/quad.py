@@ -306,7 +306,6 @@ class Quadcopter:
         self.integrator.set_f_params(cmd, wind)
         # 使用积分器从当前时间t积分到t+Ts，以计算下一个时间步的状态
         self.state = self.integrator.integrate(t, t + Ts)
-        # self.state += Ts * self.state_dot(t, self.state, cmd, wind)
 
         # 更新后的状态
         self.pos = self.state[0:3]

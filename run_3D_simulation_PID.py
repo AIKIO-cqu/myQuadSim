@@ -22,10 +22,6 @@ def main():
     ctrl = Control(quad)  # 控制器
     wind = Wind('None', 2.0, 90, -15)  # 风
 
-    sDes = traj.desTraj[0]  # 轨迹对象初始时刻（时间0）的期望状态（sDes）
-
-    ctrl.controller(quad, sDes, Ts)  # 根据当前四旋翼的状态和期望状态来计算并生成初始控制命令
-
     numTimeStep = int(Tf / Ts)  # 总的时间步数 numTimeStep
     t_all = np.zeros(numTimeStep)
     pos_all = np.zeros([numTimeStep, 3])
@@ -37,9 +33,9 @@ def main():
     t = Ti  # 将模拟的当前时间t设置为初始时间Ti
     i = 0  # 初始化时间步的索引i
     while i - Tf / Ts < 0.0:
-        quad.update(t, Ts, ctrl.w_cmd, wind)
         sDes = traj.desTraj[i + 1]
         ctrl.controller(quad, sDes, Ts)
+        quad.update(t, Ts, ctrl.w_cmd, wind)
 
         t_all[i] = t
         pos_all[i] = quad.pos
