@@ -1,12 +1,12 @@
+import math
 import numpy as np
 from numpy.linalg import inv
 from scipy.integrate import ode
 from numpy import sin, cos, tan, pi, sign
-
 from utils.rotationConversion import *
 
 
-class Quadcopter:
+class Quadrotor:
     def __init__(self):
         # -----------无人机参数-----------
         self.params = self.sys_params()  # 初始化无人机系统参数
@@ -85,6 +85,47 @@ class Quadcopter:
         params["motorc1"] = 8.49  # 电机控制参数：用于将控制命令转换为电机转速
         params["motorc0"] = 74.7  # 电机控制参数：用于将控制命令转换为电机转速
         params["motordeadband"] = 1  # 电机的死区
+
+        # 常量参数
+        self.mq = mB  # Mass of the quadrotor [kg]
+        self.g = g  # Gravity [m/s^2]
+        self.Ix = IB[0, 0]  # Moment of inertia about Bx axis [kg.m^2]
+        self.Iy = IB[1, 1]  # Moment of inertia about By axis [kg.m^2]
+        self.Iz = IB[2, 2]  # Moment of inertia about Bz axis [kg.m^2]
+        self.la = dxm  # Quadrotor arm length [m]
+        self.b = params["kTh"]  # Thrust coefficient [N.s^2]
+        self.d = params["Cd"]  # Drag coefficient [N.m.s^2]
+
+        # 约束常量
+        self.max_z = 0
+        self.max_phi = 1.0
+        self.min_phi = -self.max_phi
+        self.max_the = 1.0
+        self.min_the = -self.max_the
+
+        self.max_dx = 20.0
+        self.min_dx = -self.max_dx
+        self.max_dy = 20.0
+        self.min_dy = -self.max_dy
+        self.max_dz = 20.0
+        self.min_dz = -self.max_dz
+        self.max_dphi = math.pi / 2
+        self.min_dphi = -self.max_dphi
+        self.max_dthe = math.pi / 2
+        self.min_dthe = -self.max_dthe
+        self.max_dpsi = math.pi / 2
+        self.min_dpsi = -self.max_dpsi
+
+        self.max_thrust = 15.0
+        # self.max_thrust = params["maxThr"]
+        # self.min_thrust = 0.0
+        self.min_thrust = params["minThr"]
+        self.max_tau_phi = 10.0
+        self.min_tau_phi = -self.max_tau_phi
+        self.max_tau_the = 10.0
+        self.min_tau_the = -self.max_tau_the
+        self.max_tau_psi = 10.0
+        self.min_tau_psi = -self.max_tau_psi
 
         return params
 
@@ -318,16 +359,96 @@ class Quadcopter:
         self.extend_state()  # 计算旋转矩阵和欧拉角
         self.forces()  # 根据电机转速计算电机产生的推力和扭矩
 
-    # def set_params_forUC(self):
-    #     self.ori = np.array([self.phi, self.theta, self.psi])  # 无人机当前的偏航角、俯仰角和滚转角
-    #     self.dori = self.omega  # 无人机当前绕X、Y、Z轴的角速度
-    #     self.mq = self.params['mB']  # 无人机的质量
-    #     self.g = self.params['g']  # 重力加速度
-    #     self.Ix = self.params['IB'][0, 0]  # self.Ix、self.Iy、self.Iz: 分别是绕X、Y、Z轴的转动惯量
-    #     self.Iy = self.params['IB'][1, 1]
-    #     self.Iz = self.params['IB'][2, 2]
-    #     self.la = self.params['dxm']  # 旋翼臂长，影响扭矩对角动量的影响
-    #     self.path = [np.append(self.pos, self.ori)]
-    #     self.dpos = self.vel
-    #     self.min_thrust=self.params['minThr']
-    #     self.max_thrust=self.params['maxThr']
+    def correctControl(self, thrust, tau_phi, tau_the, tau_psi):
+        thrust = min(max(thrust, self.min_thrust), self.max_thrust)
+        tau_phi = min(max(tau_phi, self.min_tau_phi), self.max_tau_phi)
+        tau_the = min(max(tau_the, self.min_tau_the), self.max_tau_the)
+        tau_psi = min(max(tau_psi, self.min_tau_psi), self.max_tau_psi)
+        return thrust, tau_phi, tau_the, tau_psi
+
+    def correctDotState(self):
+        self.vel[0] = min(max(self.vel[0], self.min_dx), self.max_dx)
+        self.vel[1] = min(max(self.vel[1], self.min_dy), self.max_dy)
+        self.vel[2] = min(max(self.vel[2], self.min_dz), self.max_dz)
+
+        self.omega[0] = min(max(self.omega[0], self.min_dphi), self.max_dphi)
+        self.omega[1] = min(max(self.omega[1], self.min_dthe), self.max_dthe)
+        self.omega[2] = min(max(self.omega[2], self.min_dpsi), self.max_dpsi)
+
+    def correctState(self):
+        self.pos[2] = min(self.pos[2], self.max_z)
+
+        self.ori[0] = min(max(self.ori[0], self.min_phi), self.max_phi)
+        self.ori[1] = min(max(self.ori[1], self.min_the), self.max_the)
+
+    def updateConfiguration(self, thrust, tau_phi, tau_the, tau_psi, dt):
+        # 获取当前状态
+        phi = self.ori[0]
+        the = self.ori[1]
+        psi = self.ori[2]
+
+        dphi = self.omega[0]
+        dthe = self.omega[1]
+        dpsi = self.omega[2]
+
+        # 动力学模型
+        thrust, tau_phi, tau_the, tau_psi = self.correctControl(thrust, tau_phi, tau_the, tau_psi)
+        # ddx = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.cos(psi) + np.sin(phi)*np.sin(psi))
+        # ddy = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.sin(psi) - np.sin(phi)*np.cos(psi))
+        # ddz = self.g - thrust/self.mq*(np.cos(phi)*np.cos(the))
+        ddx = thrust / self.mq * np.sin(the)
+        ddy = -thrust / self.mq * np.sin(phi)
+        ddz = self.g - thrust / self.mq
+        ddpos = np.array([ddx, ddy, ddz])
+
+        ddphi = (dthe * dpsi * (self.Iy - self.Iz) + tau_phi * self.la) / self.Ix
+        ddthe = (dphi * dpsi * (self.Iz - self.Ix) + tau_the * self.la) / self.Iy
+        ddpsi = (dphi * dthe * (self.Iz - self.Iy) + tau_psi) / self.Iz
+        ddori = np.array([ddphi, ddthe, ddpsi])
+
+        # 更新状态
+        self.vel = self.vel + ddpos * dt
+        self.omega = self.omega + ddori * dt
+        self.correctDotState()
+
+        self.pos = self.pos + self.vel * dt
+        self.ori = self.ori + self.omega * dt
+        self.correctState()
+
+        # 欧拉角 -> 四元数
+        self.quat = self.eul2quat(self.ori[2], self.ori[1], self.ori[0])
+
+    def updateConfigurationViaSpeed(self, o1, o2, o3, o4, dt):
+        # Compute the control vector through angular speed
+        thrust = self.b * (o1 + o2 + o3 + o4)
+        tau_phi = self.b * (-o2 + o4)
+        tau_the = self.b * (o1 - o3)
+        tau_psi = self.d * (-o1 + o2 - o3 + o4)
+
+        self.updateConfiguration(thrust, tau_phi, tau_the, tau_psi, dt)
+
+    def eul2quat(self, r1, r2, r3):
+        # For ZYX, Yaw-Pitch-Roll
+        # psi   = RPY[0] = r1
+        # theta = RPY[1] = r2
+        # phi   = RPY[2] = r3
+
+        cr1 = cos(0.5 * r1)
+        cr2 = cos(0.5 * r2)
+        cr3 = cos(0.5 * r3)
+        sr1 = sin(0.5 * r1)
+        sr2 = sin(0.5 * r2)
+        sr3 = sin(0.5 * r3)
+
+        q0 = cr1 * cr2 * cr3 + sr1 * sr2 * sr3
+        q1 = cr1 * cr2 * sr3 - sr1 * sr2 * cr3
+        q2 = cr1 * sr2 * cr3 + sr1 * cr2 * sr3
+        q3 = sr1 * cr2 * cr3 - cr1 * sr2 * sr3
+
+        # e0,e1,e2,e3 = qw,qx,qy,qz
+        q = np.array([q0, q1, q2, q3])
+        # q = q*np.sign(e0)
+
+        q = q / norm(q)
+
+        return q

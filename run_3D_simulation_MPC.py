@@ -1,7 +1,7 @@
 import time
 import numpy as np
 from matplotlib import pyplot as plt
-from quadFiles.quad2 import Quadrotor
+from quadFiles.quad import Quadrotor
 from trajFiles.traj import Trajectory
 from utils.animation import sameAxisAnimation
 from ctrlFiles.ctrl_mpc import AltitudeMPC, PositionMPC, AttitudeMPC

@@ -1,6 +1,4 @@
 import numpy as np
-from scipy.optimize import minimize
-from quadFiles.quad import Quadcopter
 import casadi as ca
 import math
 

@@ -1,5 +1,4 @@
 import math
-
 import numpy as np
 
 
@@ -52,7 +51,7 @@ class Trajectory:
             z_ref_ = np.concatenate((z_ref_, z_ex), axis=None)
 
         dz_ref_ = np.diff(z_ref_)
-        dz_ref_ = np.concatenate((quad.dpos[2], dz_ref_), axis=None)
+        dz_ref_ = np.concatenate((quad.vel[2], dz_ref_), axis=None)
 
         ddz_ref_ = np.diff(dz_ref_)
         ddz_ref_ = np.concatenate((ddz_ref_[0], ddz_ref_), axis=None)
@@ -60,7 +59,7 @@ class Trajectory:
         thrust_ref_ = (quad.g - ddz_ref_) * quad.mq  # 动力学模型
 
         x_ = np.array([z_ref_, dz_ref_]).T
-        x_ = np.concatenate((np.array([[quad.pos[2], quad.dpos[2]]]), x_), axis=0)
+        x_ = np.concatenate((np.array([[quad.pos[2], quad.vel[2]]]), x_), axis=0)
         u_ = np.array([thrust_ref_]).T
         # x_: (N_ + 1, 2) 高度、高度速度
         # u_: (N_, 1) 推力
@@ -79,9 +78,9 @@ class Trajectory:
             y_ref_ = np.concatenate((y_ref_, y_ex), axis=None)
 
         dx_ref_ = np.diff(x_ref_)
-        dx_ref_ = np.concatenate((quad.dpos[0], dx_ref_), axis=None)
+        dx_ref_ = np.concatenate((quad.vel[0], dx_ref_), axis=None)
         dy_ref_ = np.diff(y_ref_)
-        dy_ref_ = np.concatenate((quad.dpos[1], dy_ref_), axis=None)
+        dy_ref_ = np.concatenate((quad.vel[1], dy_ref_), axis=None)
 
         ddx_ref_ = np.diff(dx_ref_)
         ddx_ref_ = np.concatenate((ddx_ref_[0], ddx_ref_), axis=None)
@@ -92,7 +91,7 @@ class Trajectory:
         phi_ref_ = -np.arcsin(ddy_ref_ * quad.mq / thrust)
 
         x_ = np.array([x_ref_, y_ref_, dx_ref_, dy_ref_]).T
-        x_ = np.concatenate((np.array([[quad.pos[0], quad.pos[1], quad.dpos[0], quad.dpos[1]]]), x_), axis=0)
+        x_ = np.concatenate((np.array([[quad.pos[0], quad.pos[1], quad.vel[0], quad.vel[1]]]), x_), axis=0)
         u_ = np.array([phi_ref_, the_ref_]).T
 
         # x_: (N_ + 1, 4) x位置，y位置，x速度，y速度
@@ -111,11 +110,11 @@ class Trajectory:
             psi_ref_ = np.concatenate((psi_ref_, psi_ex), axis=None)
 
         dphi_ref_ = np.diff(phi_ref_)
-        dphi_ref_ = np.concatenate((quad.dori[0], dphi_ref_), axis=None)
+        dphi_ref_ = np.concatenate((quad.omega[0], dphi_ref_), axis=None)
         dthe_ref_ = np.diff(the_ref_)
-        dthe_ref_ = np.concatenate((quad.dori[1], dthe_ref_), axis=None)
+        dthe_ref_ = np.concatenate((quad.omega[1], dthe_ref_), axis=None)
         dpsi_ref_ = np.diff(psi_ref_)
-        dpsi_ref_ = np.concatenate((quad.dori[2], dpsi_ref_), axis=None)
+        dpsi_ref_ = np.concatenate((quad.omega[2], dpsi_ref_), axis=None)
 
         ddphi_ref_ = np.diff(dphi_ref_)
         ddphi_ref_ = np.concatenate((ddphi_ref_[0], ddphi_ref_), axis=None)
@@ -130,7 +129,7 @@ class Trajectory:
 
         x_ = np.array([phi_ref_, the_ref_, psi_ref_, dphi_ref_, dthe_ref_, dpsi_ref_]).T
         x_ = np.concatenate(
-            (np.array([[quad.ori[0], quad.ori[1], quad.ori[2], quad.dori[0], quad.dori[1], quad.dori[2]]]), x_), axis=0)
+            (np.array([[quad.ori[0], quad.ori[1], quad.ori[2], quad.omega[0], quad.omega[1], quad.omega[2]]]), x_), axis=0)
         u_ = np.array([tau_phi_ref_, tau_the_ref_, tau_psi_ref_]).T
 
         # x_: (N_ + 1, 6) xyz方向的角度，xyz方向的角速度

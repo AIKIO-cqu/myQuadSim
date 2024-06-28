@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-
 from trajFiles.traj import Trajectory
 from ctrlFiles.ctrl_pid import Control
-from quadFiles.quad import Quadcopter
+from quadFiles.quad import Quadrotor
 from utils.plotting import errorPlotting
 from utils.windModel import Wind
 from utils.animation import sameAxisAnimation
@@ -17,7 +16,7 @@ def main():
     Tf = 20  # Tf 代表模拟的总时间，单位是秒。这里设置为20秒，意味着整个模拟将持续20秒
     ifsave = 0  # ifsave是一个标志变量，用于控制是否保存模拟的结果
 
-    quad = Quadcopter()  # 四旋翼无人机
+    quad = Quadrotor()  # 四旋翼无人机
     traj = Trajectory()  # 轨迹
     ctrl = Control(quad)  # 控制器
     wind = Wind('None', 2.0, 90, -15)  # 风
