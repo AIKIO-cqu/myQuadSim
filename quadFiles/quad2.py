@@ -13,9 +13,6 @@ class Quadrotor:
         self.dori = np.array(dori)
         self.quat = np.array(quat)
 
-        # The paths
-        self.path = [np.append(self.pos, self.ori)]
-
         # The constant parameters of quadrotor
         self.mq = 1  # Mass of the quadrotor [kg]
         self.g = 9.8  # Gravity [m/s^2]
@@ -112,9 +109,6 @@ class Quadrotor:
         self.pos = self.pos + self.dpos * dt
         self.ori = self.ori + self.dori * dt
         self.correctState()
-
-        # 记录状态
-        self.path.append(np.append(self.pos, self.ori))
 
         # 欧拉角 -> 四元数
         self.quat = self.eul2quat(self.ori[2], self.ori[1], self.ori[0])

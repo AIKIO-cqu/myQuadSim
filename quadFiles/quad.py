@@ -32,7 +32,7 @@ class Quadcopter:
                                 self.state[19]])
         self.vel_dot = np.zeros(3)  # 速度导数
         self.omega_dot = np.zeros(3)  # 角速度导数
-        self.acc = np.zeros(3)  # 加速度
+
         self.extend_state()  # 计算旋转矩阵和欧拉角
         self.forces()  # 根据电机转速计算电机产生的推力和扭矩
 
@@ -164,12 +164,10 @@ class Quadcopter:
     def extend_state(self):
         self.dcm = quat2Dcm(self.quat)  # 将四元数转化为旋转矩阵
         YRR = quatToYPR_ZYX(self.quat)  # 将四元数转化为欧拉角
-        # YPR = [Yaw, pitch, roll] = [psi, theta, phi]
-        self.euler = YRR[::-1]
-        self.psi = YRR[0]
-        self.theta = YRR[1]
         self.phi = YRR[2]
-        self.ori = np.array([self.euler[2], self.euler[1], self.euler[0]])
+        self.theta = YRR[1]
+        self.psi = YRR[0]
+        self.ori = np.array([self.phi, self.theta, self.psi])
 
     def forces(self):
         self.thr = self.params['kTh'] * self.wMotor * self.wMotor
@@ -292,8 +290,6 @@ class Quadcopter:
         sdot[18] = wddotM3
         sdot[19] = wdotM4
         sdot[20] = wddotM4
-
-        self.acc = sdot[7:10]
 
         return sdot
 

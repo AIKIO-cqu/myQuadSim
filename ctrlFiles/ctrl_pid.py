@@ -82,7 +82,6 @@ rateMax = np.array([pMax, qMax, rMax])
 class Control:
 
     def __init__(self, quad):
-        self.sDesCalc = np.zeros(16)  # 用于存储计算出的期望状态
         self.w_cmd = np.ones(4) * quad.params["w_hover"]  # 初始化电机命令（w_cmd）为一个数组，其所有元素都等于四旋翼悬停时的电机速度
         self.thr_int = np.zeros(3)  # 初始化一个三维零数组，用于存储积分项（thr_int），这通常用于PID控制器中的积分部分，以消除稳态误差
         self.setYawWeight()  # 设置偏航控制权重，这有助于平衡偏航控制与其他轴的控制
@@ -118,14 +117,6 @@ class Control:
         # Mixer 电机混合器 -> 根据计算出的推力和角速度控制输入，计算四个电机的转速命令w_cmd
         # ---------------------------
         self.w_cmd = mixerFM(quad, norm(self.thrust_sp), self.rateCtrl)
-
-        # Add calculated Desired States 期望状态向量更新
-        # ---------------------------
-        self.sDesCalc[0:3] = self.pos_sp
-        self.sDesCalc[3:6] = self.vel_sp
-        self.sDesCalc[6:9] = self.thrust_sp
-        self.sDesCalc[9:13] = self.qd
-        self.sDesCalc[13:16] = self.rate_sp
 
     def z_pos_control(self, quad):
         # z方向的位置误差
