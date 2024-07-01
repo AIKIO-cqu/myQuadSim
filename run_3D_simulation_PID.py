@@ -16,7 +16,7 @@ def main():
     Tf = 20  # Tf 代表模拟的总时间，单位是秒。这里设置为20秒，意味着整个模拟将持续20秒
 
     quad = Quadrotor()  # 四旋翼无人机
-    traj = Trajectory()  # 轨迹
+    traj = Trajectory(Tf, Ts)  # 轨迹
     ctrl = Control(quad)  # 控制器
     wind = Wind('None', 2.0, 90, -15)  # 风
 
@@ -30,8 +30,7 @@ def main():
     # 仿真循环
     t = Ti  # 将模拟的当前时间t设置为初始时间Ti
     for i in range(numTimeStep):
-        sDes = traj.ref[i]
-        cmd = ctrl.controller(quad, sDes, Ts)
+        cmd = ctrl.controller(traj, quad, Ts, i)
         quad.update_pid(t, Ts, cmd, wind)
 
         t_all[i] = t

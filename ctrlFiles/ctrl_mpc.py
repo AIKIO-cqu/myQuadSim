@@ -1,6 +1,8 @@
 import numpy as np
 import casadi as ca
 import math
+from numpy.linalg import norm
+from utils.mixer import *
 
 
 def shift(u, x_n):
@@ -370,9 +372,9 @@ class AttitudeMPC:
         ddpsi_ref_ = np.concatenate((ddpsi_ref_[0], ddpsi_ref_), axis=None)
 
         tau_phi_ref_ = (quad.params['Ix'] * ddphi_ref_ - dthe_ref_ * dpsi_ref_ * (
-                    quad.params['Iy'] - quad.params['Iz'])) / quad.params['dxm']
+                quad.params['Iy'] - quad.params['Iz'])) / quad.params['dxm']
         tau_the_ref_ = (quad.params['Iy'] * ddthe_ref_ - dphi_ref_ * dpsi_ref_ * (
-                    quad.params['Iz'] - quad.params['Ix'])) / quad.params['dxm']
+                quad.params['Iz'] - quad.params['Ix'])) / quad.params['dxm']
         tau_psi_ref_ = quad.params['Iz'] * ddpsi_ref_ - dphi_ref_ * dthe_ref_ * (quad.params['Ix'] - quad.params['Iy'])
 
         x_ = np.array([phi_ref_, the_ref_, psi_ref_, dphi_ref_, dthe_ref_, dpsi_ref_]).T
@@ -412,14 +414,14 @@ class Control:
         self.po = PositionMPC(quad, T=Ts, N=N)
         self.at = AttitudeMPC(quad, T=Ts, N=N)
 
-    def controller(self, traj, quad, i, N):
+    def controller(self, traj, quad, i, N, Ts):
         # Solve altitude -> thrust
         thrusts = self.al.solve(traj, quad, i, N)
 
         # Solve position -> phid, thed
-        phids, theds = self.po.solve(traj, quad, i, N, thrusts)
+        phis, thes = self.po.solve(traj, quad, i, N, thrusts)
 
         # Solve attitude -> tau_phi, tau_the, tau_psi
-        tau_phis, tau_thes, tau_psis = self.at.solve(traj, quad, i, N, phids, theds)
+        tau_phis, tau_thes, tau_psis = self.at.solve(traj, quad, i, N, phis, thes)
 
         return thrusts, tau_phis, tau_thes, tau_psis

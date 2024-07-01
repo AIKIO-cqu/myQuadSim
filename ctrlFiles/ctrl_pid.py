@@ -92,11 +92,11 @@ class Control:
         self.psi_sp = 0.  # 欧拉角
         self.yawFF = np.zeros(3)  # 偏航前馈控制量
 
-    def controller(self, quad, sDes, Ts):
+    def controller(self, traj, quad, Ts, idx):
 
         # 获取期望轨迹
-        self.pos_sp[:] = sDes[0:3]
-        self.psi_sp = sDes[3]
+        self.pos_sp[:] = traj.ref[idx][0:3]
+        self.psi_sp = traj.ref[idx][3]
 
         self.z_pos_control(quad)
         self.xy_pos_control(quad)
