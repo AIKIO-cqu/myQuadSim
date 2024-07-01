@@ -48,7 +48,7 @@ class Quadrotor:
         print('无人机初始化完成')
 
     def sys_params(self):
-        mB = 1.2  # 电机质量
+        m = 1.2  # 电机质量
         g = 9.81  # 重力加速度
         dxm = 0.16  # 无人机翼臂长度
         dym = 0.16  # 无人机翼臂长度
@@ -59,12 +59,15 @@ class Quadrotor:
         IRzz = 2.7e-5  # 单个电机的转动惯量
 
         params = {}
-        params['mB'] = mB
+        params['m'] = m
         params['g'] = g
         params['dxm'] = dxm
         params['dym'] = dym
         params['dzm'] = dzm
         params['IB'] = IB
+        params['Ix'] = IB[0, 0]
+        params['Iy'] = IB[1, 1]
+        params['Iz'] = IB[2, 2]
         params['invI'] = inv(IB)  # 转动惯量的逆矩阵
         params['IRzz'] = IRzz
 
@@ -72,12 +75,15 @@ class Quadrotor:
         params["Cd"] = 0.1  # 阻力系数
         params["kTh"] = 1.076e-5  # 推力系数
         params["kTo"] = 1.632e-7  # 扭矩系数
+
         params["mixerFM"] = self.makeMixerFM(params)  # 矩阵：根据电机转速计算推力和力矩
         params["mixerFMinv"] = inv(params["mixerFM"])
+
         params["minThr"] = 0.1 * 4  # 总推力的最小值
         params["maxThr"] = 9.18 * 4  # 总推力的最大值
         params["minWmotor"] = 75  # 电机转速的最小值
         params["maxWmotor"] = 925  # 电机转速的最大值
+
         params["tau"] = 0.015  # 电机动力学的二阶系统参数
         params["kp"] = 1.0  # 电机动力学的二阶系统参数
         params["damp"] = 1.0  # 电机动力学的二阶系统参数
@@ -86,46 +92,29 @@ class Quadrotor:
         params["motorc0"] = 74.7  # 电机控制参数：用于将控制命令转换为电机转速
         params["motordeadband"] = 1  # 电机的死区
 
-        # 常量参数
-        self.mq = mB  # Mass of the quadrotor [kg]
-        self.g = g  # Gravity [m/s^2]
-        self.Ix = IB[0, 0]  # Moment of inertia about Bx axis [kg.m^2]
-        self.Iy = IB[1, 1]  # Moment of inertia about By axis [kg.m^2]
-        self.Iz = IB[2, 2]  # Moment of inertia about Bz axis [kg.m^2]
-        self.la = dxm  # Quadrotor arm length [m]
-        self.b = params["kTh"]  # Thrust coefficient [N.s^2]
-        self.d = params["Cd"]  # Drag coefficient [N.m.s^2]
-
-        # 约束常量
-        self.max_z = 0
-        self.max_phi = 1.0
-        self.min_phi = -self.max_phi
-        self.max_the = 1.0
-        self.min_the = -self.max_the
-
-        self.max_dx = 20.0
-        self.min_dx = -self.max_dx
-        self.max_dy = 20.0
-        self.min_dy = -self.max_dy
-        self.max_dz = 20.0
-        self.min_dz = -self.max_dz
-        self.max_dphi = math.pi / 2
-        self.min_dphi = -self.max_dphi
-        self.max_dthe = math.pi / 2
-        self.min_dthe = -self.max_dthe
-        self.max_dpsi = math.pi / 2
-        self.min_dpsi = -self.max_dpsi
-
-        self.max_thrust = 15.0
-        # self.max_thrust = params["maxThr"]
-        # self.min_thrust = 0.0
-        self.min_thrust = params["minThr"]
-        self.max_tau_phi = 10.0
-        self.min_tau_phi = -self.max_tau_phi
-        self.max_tau_the = 10.0
-        self.min_tau_the = -self.max_tau_the
-        self.max_tau_psi = 10.0
-        self.min_tau_psi = -self.max_tau_psi
+        params['max_z'] = 0
+        params['max_phi'] = 1.0
+        params['min_phi'] = -params['max_phi']
+        params['max_the'] = 1.0
+        params['min_the'] = -params['max_the']
+        params['max_dx'] = 20.0
+        params['min_dx'] = -params['max_dx']
+        params['max_dy'] = 20.0
+        params['min_dy'] = -params['max_dy']
+        params['max_dz'] = 20.0
+        params['min_dz'] = -params['max_dz']
+        params['max_dphi'] = math.pi / 2
+        params['min_dphi'] = -params['max_dphi']
+        params['max_dthe'] = math.pi / 2
+        params['min_dthe'] = -params['max_dthe']
+        params['max_dpsi'] = math.pi / 2
+        params['min_dpsi'] = -params['max_dpsi']
+        params['max_tau_phi'] = 10.0
+        params['min_tau_phi'] = -params['max_tau_phi']
+        params['max_tau_the'] = 10.0
+        params['min_tau_the'] = -params['max_tau_the']
+        params['max_tau_psi'] = 10.0
+        params['min_tau_psi'] = -params['max_tau_psi']
 
         return params
 
@@ -144,7 +133,7 @@ class Quadrotor:
         return mixerFM
 
     def init_cmd(self, params):
-        mB = params["mB"]
+        m = params["m"]
         g = params["g"]
         kTh = params["kTh"]
         kTo = params["kTo"]
@@ -156,7 +145,7 @@ class Quadrotor:
         m*g/4 = kTh*w^2
         torque = kTo*w^2
         """
-        thr_hover = mB * g / 4.0  # 悬停所需的推力
+        thr_hover = m * g / 4.0  # 悬停所需的推力
         w_hover = np.sqrt(thr_hover / kTh)  # 悬停时的电机转速
         tor_hover = kTo * w_hover * w_hover  # 悬停时的电机扭矩
         cmd_hover = (w_hover - c0) / c1  # 悬停时的控制命令
@@ -217,7 +206,7 @@ class Quadrotor:
     def state_dot(self, t, state, cmd, wind):
         """计算无人机状态的导数"""
         # step1. 获取无人机系统参数
-        mB = self.params["mB"]
+        m = self.params["m"]
         g = self.params["g"]
         dxm = self.params["dxm"]
         dym = self.params["dym"]
@@ -294,11 +283,11 @@ class Quadrotor:
             [0.5 * p * q3 + 0.5 * q * q0 - 0.5 * q1 * r],
             [-0.5 * p * q2 + 0.5 * q * q1 + 0.5 * q0 * r],
             [(Cd * sign(velW * cos(qW1) * cos(qW2) - xdot) * (velW * cos(qW1) * cos(qW2) - xdot) ** 2 - 2 * (
-                    q0 * q2 + q1 * q3) * (ThrM1 + ThrM2 + ThrM3 + ThrM4)) / mB],
+                    q0 * q2 + q1 * q3) * (ThrM1 + ThrM2 + ThrM3 + ThrM4)) / m],
             [(Cd * sign(velW * sin(qW1) * cos(qW2) - ydot) * (velW * sin(qW1) * cos(qW2) - ydot) ** 2 + 2 * (
-                    q0 * q1 - q2 * q3) * (ThrM1 + ThrM2 + ThrM3 + ThrM4)) / mB],
+                    q0 * q1 - q2 * q3) * (ThrM1 + ThrM2 + ThrM3 + ThrM4)) / m],
             [(-Cd * sign(velW * sin(qW2) + zdot) * (velW * sin(qW2) + zdot) ** 2 - (ThrM1 + ThrM2 + ThrM3 + ThrM4) * (
-                    q0 ** 2 - q1 ** 2 - q2 ** 2 + q3 ** 2) + g * mB) / mB],
+                    q0 ** 2 - q1 ** 2 - q2 ** 2 + q3 ** 2) + g * m) / m],
             [((IByy - IBzz) * q * r - uP * IRzz * (wM1 - wM2 + wM3 - wM4) * q + (
                     ThrM1 - ThrM2 - ThrM3 + ThrM4) * dym) / IBxx],
             # uP activates or deactivates the use of gyroscopic precession.
@@ -334,7 +323,7 @@ class Quadrotor:
 
         return sdot
 
-    def update(self, t, Ts, cmd, wind):
+    def update_pid(self, t, Ts, cmd, wind):
         # 先记录无人机当前的速度和角速度
         prev_vel = self.vel
         prev_omega = self.omega
@@ -358,74 +347,6 @@ class Quadrotor:
         # 扩展状态和力的更新
         self.extend_state()  # 计算旋转矩阵和欧拉角
         self.forces()  # 根据电机转速计算电机产生的推力和扭矩
-
-    def correctControl(self, thrust, tau_phi, tau_the, tau_psi):
-        thrust = min(max(thrust, self.min_thrust), self.max_thrust)
-        tau_phi = min(max(tau_phi, self.min_tau_phi), self.max_tau_phi)
-        tau_the = min(max(tau_the, self.min_tau_the), self.max_tau_the)
-        tau_psi = min(max(tau_psi, self.min_tau_psi), self.max_tau_psi)
-        return thrust, tau_phi, tau_the, tau_psi
-
-    def correctDotState(self):
-        self.vel[0] = min(max(self.vel[0], self.min_dx), self.max_dx)
-        self.vel[1] = min(max(self.vel[1], self.min_dy), self.max_dy)
-        self.vel[2] = min(max(self.vel[2], self.min_dz), self.max_dz)
-
-        self.omega[0] = min(max(self.omega[0], self.min_dphi), self.max_dphi)
-        self.omega[1] = min(max(self.omega[1], self.min_dthe), self.max_dthe)
-        self.omega[2] = min(max(self.omega[2], self.min_dpsi), self.max_dpsi)
-
-    def correctState(self):
-        self.pos[2] = min(self.pos[2], self.max_z)
-
-        self.ori[0] = min(max(self.ori[0], self.min_phi), self.max_phi)
-        self.ori[1] = min(max(self.ori[1], self.min_the), self.max_the)
-
-    def updateConfiguration(self, thrust, tau_phi, tau_the, tau_psi, dt):
-        # 获取当前状态
-        phi = self.ori[0]
-        the = self.ori[1]
-        psi = self.ori[2]
-
-        dphi = self.omega[0]
-        dthe = self.omega[1]
-        dpsi = self.omega[2]
-
-        # 动力学模型
-        thrust, tau_phi, tau_the, tau_psi = self.correctControl(thrust, tau_phi, tau_the, tau_psi)
-        # ddx = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.cos(psi) + np.sin(phi)*np.sin(psi))
-        # ddy = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.sin(psi) - np.sin(phi)*np.cos(psi))
-        # ddz = self.g - thrust/self.mq*(np.cos(phi)*np.cos(the))
-        ddx = thrust / self.mq * np.sin(the)
-        ddy = -thrust / self.mq * np.sin(phi)
-        ddz = self.g - thrust / self.mq
-        ddpos = np.array([ddx, ddy, ddz])
-
-        ddphi = (dthe * dpsi * (self.Iy - self.Iz) + tau_phi * self.la) / self.Ix
-        ddthe = (dphi * dpsi * (self.Iz - self.Ix) + tau_the * self.la) / self.Iy
-        ddpsi = (dphi * dthe * (self.Iz - self.Iy) + tau_psi) / self.Iz
-        ddori = np.array([ddphi, ddthe, ddpsi])
-
-        # 更新状态
-        self.vel = self.vel + ddpos * dt
-        self.omega = self.omega + ddori * dt
-        self.correctDotState()
-
-        self.pos = self.pos + self.vel * dt
-        self.ori = self.ori + self.omega * dt
-        self.correctState()
-
-        # 欧拉角 -> 四元数
-        self.quat = self.eul2quat(self.ori[2], self.ori[1], self.ori[0])
-
-    def updateConfigurationViaSpeed(self, o1, o2, o3, o4, dt):
-        # Compute the control vector through angular speed
-        thrust = self.b * (o1 + o2 + o3 + o4)
-        tau_phi = self.b * (-o2 + o4)
-        tau_the = self.b * (o1 - o3)
-        tau_psi = self.d * (-o1 + o2 - o3 + o4)
-
-        self.updateConfiguration(thrust, tau_phi, tau_the, tau_psi, dt)
 
     def eul2quat(self, r1, r2, r3):
         # For ZYX, Yaw-Pitch-Roll
@@ -452,3 +373,75 @@ class Quadrotor:
         q = q / norm(q)
 
         return q
+
+    def update_mpc(self, thrust, tau_phi, tau_the, tau_psi, dt):
+        # 获取当前状态
+        phi = self.ori[0]
+        the = self.ori[1]
+        psi = self.ori[2]
+
+        dphi = self.omega[0]
+        dthe = self.omega[1]
+        dpsi = self.omega[2]
+
+        # 动力学模型
+        thrust, tau_phi, tau_the, tau_psi = self.correctControl(thrust, tau_phi, tau_the, tau_psi)
+        # ddx = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.cos(psi) + np.sin(phi)*np.sin(psi))
+        # ddy = thrust/self.mq*(np.cos(phi)*np.sin(the)*np.sin(psi) - np.sin(phi)*np.cos(psi))
+        # ddz = self.g - thrust/self.mq*(np.cos(phi)*np.cos(the))
+        ddx = thrust / self.params['m'] * np.sin(the)
+        ddy = -thrust / self.params['m'] * np.sin(phi)
+        ddz = self.params['g'] - thrust / self.params['m']
+        ddpos = np.array([ddx, ddy, ddz])
+
+        ddphi = (dthe * dpsi * (self.params['Iy'] - self.params['Iz']) + tau_phi * self.params['dxm']) / self.params[
+            'Ix']
+        ddthe = (dphi * dpsi * (self.params['Iz'] - self.params['Ix']) + tau_the * self.params['dxm']) / self.params[
+            'Iy']
+        ddpsi = (dphi * dthe * (self.params['Iz'] - self.params['Iy']) + tau_psi) / self.params['Iz']
+        ddori = np.array([ddphi, ddthe, ddpsi])
+
+        # 更新状态
+        self.vel = self.vel + ddpos * dt
+        self.omega = self.omega + ddori * dt
+        self.correctDotState()
+
+        self.pos = self.pos + self.vel * dt
+        self.ori = self.ori + self.omega * dt
+        self.correctState()
+
+        # 欧拉角 -> 四元数
+        self.quat = self.eul2quat(self.ori[2], self.ori[1], self.ori[0])
+
+    def update_mpc_ViaSpeed(self, o1, o2, o3, o4, dt):
+        # Compute the control vector through angular speed
+        # self.b = params["kTh"]  # Thrust coefficient [N.s^2]
+        # self.d = params["Cd"]  # Drag coefficient [N.m.s^2]
+        thrust = self.params["kTh"] * (o1 + o2 + o3 + o4)
+        tau_phi = self.params["kTh"] * (-o2 + o4)
+        tau_the = self.params["kTh"] * (o1 - o3)
+        tau_psi = self.params["Cd"] * (-o1 + o2 - o3 + o4)
+
+        self.update_mpc(thrust, tau_phi, tau_the, tau_psi, dt)
+
+    def correctControl(self, thrust, tau_phi, tau_the, tau_psi):
+        thrust = min(max(thrust, self.params['minThr']), self.params['maxThr'])
+        tau_phi = min(max(tau_phi, self.params['min_tau_phi']), self.params['max_tau_phi'])
+        tau_the = min(max(tau_the, self.params['min_tau_the']), self.params['max_tau_the'])
+        tau_psi = min(max(tau_psi, self.params['min_tau_psi']), self.params['max_tau_psi'])
+        return thrust, tau_phi, tau_the, tau_psi
+
+    def correctDotState(self):
+        self.vel[0] = min(max(self.vel[0], self.params['min_dx']), self.params['max_dx'])
+        self.vel[1] = min(max(self.vel[1], self.params['min_dy']), self.params['max_dy'])
+        self.vel[2] = min(max(self.vel[2], self.params['min_dz']), self.params['max_dz'])
+
+        self.omega[0] = min(max(self.omega[0], self.params['min_dphi']), self.params['max_dphi'])
+        self.omega[1] = min(max(self.omega[1], self.params['min_dthe']), self.params['max_dthe'])
+        self.omega[2] = min(max(self.omega[2], self.params['min_dpsi']), self.params['max_dpsi'])
+
+    def correctState(self):
+        self.pos[2] = min(self.pos[2], self.params['max_z'])
+
+        self.ori[0] = min(max(self.ori[0], self.params['min_phi']), self.params['max_phi'])
+        self.ori[1] = min(max(self.ori[1], self.params['min_the']), self.params['max_the'])

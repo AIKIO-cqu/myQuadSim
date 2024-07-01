@@ -14,7 +14,6 @@ def main():
     Ti = 0  # Ti 代表模拟的初始时间，这里设置为0，意味着模拟从时间的起点开始
     Ts = 0.005  # Ts 是模拟的时间步长，单位是秒。这里设置为0.005秒，意味着每次迭代模拟将前进0.005秒的时间
     Tf = 20  # Tf 代表模拟的总时间，单位是秒。这里设置为20秒，意味着整个模拟将持续20秒
-    ifsave = 0  # ifsave是一个标志变量，用于控制是否保存模拟的结果
 
     quad = Quadrotor()  # 四旋翼无人机
     traj = Trajectory()  # 轨迹
@@ -26,21 +25,21 @@ def main():
     pos_all = np.zeros([numTimeStep, 3])
     quat_all = np.zeros([numTimeStep, 4])
     pos_err_all = np.zeros([numTimeStep, 3])
-    ori_err_all = np.zeros([numTimeStep, 3])
+    psi_err_all = np.zeros([numTimeStep, 1])
 
     # Run Simulation
     t = Ti  # 将模拟的当前时间t设置为初始时间Ti
-    i = 0  # 初始化时间步的索引i
-    while i - Tf / Ts < 0.0:
-        sDes = traj.desTraj[i + 1]
-        ctrl.controller(quad, sDes, Ts)
-        quad.update(t, Ts, ctrl.w_cmd, wind)
+    numTimeStep = int(Tf / Ts)  # 总的时间步
+    for i in range(numTimeStep):
+        sDes = traj.ref[i]
+        cmd = ctrl.controller(quad, sDes, Ts)
+        quad.update_pid(t, Ts, cmd, wind)
 
         t_all[i] = t
         pos_all[i] = quad.pos
         quat_all[i] = quad.quat
         pos_err_all[i] = quad.pos - traj.des_pos[i]
-        ori_err_all[i] = quad.ori - traj.des_ori[i]
+        psi_err_all[i] = quad.psi - traj.des_psi[i]
 
         t += Ts
         i += 1
@@ -50,15 +49,14 @@ def main():
 
     # 动画
     sameAxisAnimation(t_all,
-                      traj.wps,
                       pos_all,
                       quat_all,
-                      traj.desTraj,
+                      traj.ref,
                       Ts,
                       ifsave=False)
 
     # 误差图表
-    errorPlotting(t_all, pos_err_all, ori_err_all)
+    errorPlotting(t_all, pos_err_all, psi_err_all)
 
 
 if __name__ == "__main__":

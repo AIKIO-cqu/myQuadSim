@@ -42,7 +42,7 @@ class AltitudeMPC:
         # 动力学模型，获取z方向的速度、加速度
         f = lambda x_, u_: ca.vertcat(*[
             x_[1],
-            self.quad.g - u_ / self.quad.mq,
+            self.quad.params['g'] - u_ / self.quad.params['m'],
         ])
 
         # 优化器的参数：期望控制输入和期望状态
@@ -65,10 +65,10 @@ class AltitudeMPC:
         self.opti.minimize(obj)
 
         # 边界约束
-        self.opti.subject_to(self.opti.bounded(-math.inf, z, self.quad.max_z))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_dz, dz, self.quad.max_dz))
+        self.opti.subject_to(self.opti.bounded(-math.inf, z, self.quad.params['max_z']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_dz'], dz, self.quad.params['max_dz']))
 
-        self.opti.subject_to(self.opti.bounded(self.quad.min_thrust, thrust, self.quad.max_thrust))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['minThr'], thrust, self.quad.params['maxThr']))
 
         opts_setting = {'ipopt.max_iter': 2000,
                         'ipopt.print_level': 0,
@@ -78,7 +78,31 @@ class AltitudeMPC:
 
         self.opti.solver('ipopt', opts_setting)
 
-    def solve(self, next_trajectories, next_controls):
+    def solve(self, traj, quad, idx, N_):
+        """首先获取z方向的期望状态和控制，然后优化控制"""
+        z_ref_ = traj.z_ref[idx:(idx + N_)]
+        length = len(z_ref_)
+        if length < N_:  # 如果当前获取的参考轨迹长度小于预测范围N_，则需要进行扩展
+            z_ex = np.ones(N_ - length) * z_ref_[-1]
+            z_ref_ = np.concatenate((z_ref_, z_ex), axis=None)
+
+        dz_ref_ = np.diff(z_ref_)
+        dz_ref_ = np.concatenate((quad.vel[2], dz_ref_), axis=None)
+
+        ddz_ref_ = np.diff(dz_ref_)
+        ddz_ref_ = np.concatenate((ddz_ref_[0], ddz_ref_), axis=None)
+
+        thrust_ref_ = (quad.params['g'] - ddz_ref_) * quad.params['m']  # 动力学模型
+
+        x_ = np.array([z_ref_, dz_ref_]).T
+        x_ = np.concatenate((np.array([[quad.pos[2], quad.vel[2]]]), x_), axis=0)
+        u_ = np.array([thrust_ref_]).T
+        # x_: (N_ + 1, 2) 高度、高度速度
+        # u_: (N_, 1) 推力
+
+        next_trajectories = x_
+        next_controls = u_
+
         # 设置优化器参数，此处仅更新x的初始状态(x0)
         self.opti.set_value(self.opt_x_ref, next_trajectories)
         self.opti.set_value(self.opt_u_ref, next_controls)
@@ -135,12 +159,12 @@ class PositionMPC:
         # 动力学模型(t_是推力)，获取xy方向速度、xy方向加速度
         f = lambda x_, u_, t_: ca.vertcat(*[
             x_[2], x_[3],  # dx, dy
-            ca.sin(u_[1]) * t_ / self.quad.mq,  # ddx
-            -ca.sin(u_[0]) * t_ / self.quad.mq,  # ddy
+            ca.sin(u_[1]) * t_ / self.quad.params['m'],  # ddx
+            -ca.sin(u_[0]) * t_ / self.quad.params['m'],  # ddy
         ])
 
         # 优化器的参数：推力、期望控制输入和期望状态
-        self.thrust = self.opti.parameter(self.N, 1)
+        self.thrusts = self.opti.parameter(self.N, 1)
         self.opt_u_ref = self.opti.parameter(self.N, 2)
         self.opt_x_ref = self.opti.parameter(self.N + 1, 4)
 
@@ -148,7 +172,7 @@ class PositionMPC:
         self.opti.subject_to(self.opt_states[0, :] == self.opt_x_ref[0, :])
         for i in range(self.N):
             x_next = self.opt_states[i, :] + f(self.opt_states[i, :], self.opt_controls[i, :],
-                                               self.thrust[i, :]).T * self.T
+                                               self.thrusts[i, :]).T * self.T
             self.opti.subject_to(self.opt_states[i + 1, :] == x_next)
 
         # cost function
@@ -161,11 +185,11 @@ class PositionMPC:
         self.opti.minimize(obj)
 
         # 边界约束
-        self.opti.subject_to(self.opti.bounded(self.quad.min_dx, dx, self.quad.max_dx))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_dy, dy, self.quad.max_dy))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_dx'], dx, self.quad.params['max_dx']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_dy'], dy, self.quad.params['max_dy']))
 
-        self.opti.subject_to(self.opti.bounded(self.quad.min_phi, phid, self.quad.max_phi))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_the, thed, self.quad.max_the))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_phi'], phid, self.quad.params['max_phi']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_the'], thed, self.quad.params['max_the']))
 
         opts_setting = {'ipopt.max_iter': 2000,
                         'ipopt.print_level': 0,
@@ -175,11 +199,45 @@ class PositionMPC:
 
         self.opti.solver('ipopt', opts_setting)
 
-    def solve(self, next_trajectories, next_controls, thrust):
+    def solve(self, traj, quad, idx, N_, thrusts):
+        """首先获取xy平面的期望状态和控制，然后优化控制"""
+        x_ref_ = traj.x_ref[idx:(idx + N_)]
+        y_ref_ = traj.y_ref[idx:(idx + N_)]
+        length = len(x_ref_)
+        if length < N_:
+            x_ex = np.ones(N_ - length) * x_ref_[-1]
+            x_ref_ = np.concatenate((x_ref_, x_ex), axis=None)
+
+            y_ex = np.ones(N_ - length) * y_ref_[-1]
+            y_ref_ = np.concatenate((y_ref_, y_ex), axis=None)
+
+        dx_ref_ = np.diff(x_ref_)
+        dx_ref_ = np.concatenate((quad.vel[0], dx_ref_), axis=None)
+        dy_ref_ = np.diff(y_ref_)
+        dy_ref_ = np.concatenate((quad.vel[1], dy_ref_), axis=None)
+
+        ddx_ref_ = np.diff(dx_ref_)
+        ddx_ref_ = np.concatenate((ddx_ref_[0], ddx_ref_), axis=None)
+        ddy_ref_ = np.diff(dy_ref_)
+        ddy_ref_ = np.concatenate((ddy_ref_[0], ddy_ref_), axis=None)
+
+        the_ref_ = np.arcsin(ddx_ref_ * quad.params['m'] / thrusts)
+        phi_ref_ = -np.arcsin(ddy_ref_ * quad.params['m'] / thrusts)
+
+        x_ = np.array([x_ref_, y_ref_, dx_ref_, dy_ref_]).T
+        x_ = np.concatenate((np.array([[quad.pos[0], quad.pos[1], quad.vel[0], quad.vel[1]]]), x_), axis=0)
+        u_ = np.array([phi_ref_, the_ref_]).T
+
+        # x_: (N_ + 1, 4) x位置，y位置，x速度，y速度
+        # u_: (N_, 2) 俯仰角，滚动角
+
+        next_trajectories = x_
+        next_controls = u_
+
         # 设置优化器参数，此处仅更新x的初始状态(x0)
         self.opti.set_value(self.opt_x_ref, next_trajectories)
         self.opti.set_value(self.opt_u_ref, next_controls)
-        self.opti.set_value(self.thrust, thrust)
+        self.opti.set_value(self.thrusts, thrusts)
 
         # 为优化目标提供的初始猜测
         # self.next_states:上一次优化的最终状态; self.u0:上一次优化的控制输入
@@ -236,9 +294,9 @@ class AttitudeMPC:
         # 动力学模型，获取xyz角速度和角加速度
         f = lambda x_, u_: ca.vertcat(*[
             x_[3], x_[4], x_[5],  # dotphi, dotthe, dotpsi
-            (x_[4] * x_[5] * (self.quad.Iy - self.quad.Iz) + self.quad.la * u_[0]) / self.quad.Ix,  # ddotphi
-            (x_[3] * x_[5] * (self.quad.Iz - self.quad.Ix) + self.quad.la * u_[1]) / self.quad.Iy,  # ddotthe
-            (x_[3] * x_[4] * (self.quad.Ix - self.quad.Iy) + u_[2]) / self.quad.Iz,  # ddotpsi
+            (x_[4] * x_[5] * (self.quad.params['Iy'] - self.quad.params['Iz']) + self.quad.params['dxm'] * u_[0]) / self.quad.params['Ix'],  # ddotphi
+            (x_[3] * x_[5] * (self.quad.params['Iz'] - self.quad.params['Ix']) + self.quad.params['dxm'] * u_[1]) / self.quad.params['Iy'],  # ddotthe
+            (x_[3] * x_[4] * (self.quad.params['Ix'] - self.quad.params['Iy']) + u_[2]) / self.quad.params['Iz'],  # ddotpsi
         ])
 
         # 优化器的参数：期望控制输入和期望状态
@@ -261,16 +319,16 @@ class AttitudeMPC:
         self.opti.minimize(obj)
 
         # 边界约束
-        self.opti.subject_to(self.opti.bounded(self.quad.min_phi, phi, self.quad.max_phi))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_the, the, self.quad.max_the))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_phi'], phi, self.quad.params['max_phi']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_the'], the, self.quad.params['max_the']))
 
-        self.opti.subject_to(self.opti.bounded(self.quad.min_dphi, dphi, self.quad.max_dphi))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_dthe, dthe, self.quad.max_dthe))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_dpsi, dpsi, self.quad.max_dpsi))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_dphi'], dphi, self.quad.params['max_dphi']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_dthe'], dthe, self.quad.params['max_dthe']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_dpsi'], dpsi, self.quad.params['max_dpsi']))
 
-        self.opti.subject_to(self.opti.bounded(self.quad.min_tau_phi, tau_phi, self.quad.max_tau_phi))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_tau_the, tau_the, self.quad.max_tau_the))
-        self.opti.subject_to(self.opti.bounded(self.quad.min_tau_psi, tau_psi, self.quad.max_tau_psi))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_tau_phi'], tau_phi, self.quad.params['max_tau_phi']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_tau_the'], tau_the, self.quad.params['max_tau_the']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_tau_psi'], tau_psi, self.quad.params['max_tau_psi']))
 
         opts_setting = {'ipopt.max_iter': 2000,
                         'ipopt.print_level': 0,
@@ -280,7 +338,47 @@ class AttitudeMPC:
 
         self.opti.solver('ipopt', opts_setting)
 
-    def solve(self, next_trajectories, next_controls):
+    def solve(self, traj, quad, idx, N_, phids, theds):
+        """首先获取无人机姿态的期望状态和控制，然后优化控制"""
+        phi_ref_ = phids
+        the_ref_ = theds
+
+        psi_ref_ = traj.psi_ref[idx:(idx + N_)]
+        length = len(psi_ref_)
+        if length < N_:
+            psi_ex = np.ones(N_ - length) * psi_ref_[-1]
+            psi_ref_ = np.concatenate((psi_ref_, psi_ex), axis=None)
+
+        dphi_ref_ = np.diff(phi_ref_)
+        dphi_ref_ = np.concatenate((quad.omega[0], dphi_ref_), axis=None)
+        dthe_ref_ = np.diff(the_ref_)
+        dthe_ref_ = np.concatenate((quad.omega[1], dthe_ref_), axis=None)
+        dpsi_ref_ = np.diff(psi_ref_)
+        dpsi_ref_ = np.concatenate((quad.omega[2], dpsi_ref_), axis=None)
+
+        ddphi_ref_ = np.diff(dphi_ref_)
+        ddphi_ref_ = np.concatenate((ddphi_ref_[0], ddphi_ref_), axis=None)
+        ddthe_ref_ = np.diff(dthe_ref_)
+        ddthe_ref_ = np.concatenate((ddthe_ref_[0], ddthe_ref_), axis=None)
+        ddpsi_ref_ = np.diff(dpsi_ref_)
+        ddpsi_ref_ = np.concatenate((ddpsi_ref_[0], ddpsi_ref_), axis=None)
+
+        tau_phi_ref_ = (quad.params['Ix'] * ddphi_ref_ - dthe_ref_ * dpsi_ref_ * (quad.params['Iy'] - quad.params['Iy'])) / quad.params['dxm']
+        tau_the_ref_ = (quad.params['Iy'] * ddthe_ref_ - dphi_ref_ * dpsi_ref_ * (quad.params['Iz'] - quad.params['Ix'])) / quad.params['dxm']
+        tau_psi_ref_ = quad.params['Iz'] * ddpsi_ref_ - dphi_ref_ * dthe_ref_ * (quad.params['Ix'] - quad.params['Iy'])
+
+        x_ = np.array([phi_ref_, the_ref_, psi_ref_, dphi_ref_, dthe_ref_, dpsi_ref_]).T
+        x_ = np.concatenate(
+            (np.array([[quad.ori[0], quad.ori[1], quad.ori[2], quad.omega[0], quad.omega[1], quad.omega[2]]]), x_),
+            axis=0)
+        u_ = np.array([tau_phi_ref_, tau_the_ref_, tau_psi_ref_]).T
+
+        # x_: (N_ + 1, 6) xyz方向的角度，xyz方向的角速度
+        # u_: (N_, 3) xyz方向的扭矩
+
+        next_trajectories = x_
+        next_controls = u_
+
         # 设置优化器参数，此处仅更新x的初始状态(x0)
         self.opti.set_value(self.opt_x_ref, next_trajectories)
         self.opti.set_value(self.opt_u_ref, next_controls)

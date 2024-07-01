@@ -89,24 +89,17 @@ class Control:
         self.vel_sp = np.zeros(3)  # 速度
         self.acc_sp = np.zeros(3)  # 加速度
         self.thrust_sp = np.zeros(3)  # 推力
-        self.eul_sp = np.zeros(3)  # 欧拉角
-        self.pqr_sp = np.zeros(3)  # 角速度
+        self.psi_sp = 0.  # 欧拉角
         self.yawFF = np.zeros(3)  # 偏航前馈控制量
 
     def controller(self, quad, sDes, Ts):
 
         # 获取期望轨迹
-        # ---------------------------
         self.pos_sp[:] = sDes[0:3]
-        self.vel_sp[:] = sDes[3:6]
-        self.acc_sp[:] = sDes[6:9]
-        self.thrust_sp[:] = sDes[9:12]
-        self.eul_sp[:] = sDes[12:15]
-        self.pqr_sp[:] = sDes[15:18]
-        self.yawFF[:] = sDes[18]
+        self.psi_sp = sDes[3]
 
-        self.z_pos_control(quad)  # 垂直位置控制
-        self.xy_pos_control(quad)  # 水平位置控制
+        self.z_pos_control(quad)
+        self.xy_pos_control(quad)
         self.saturateVel()
         self.z_vel_control(quad, Ts)
         self.xy_vel_control(quad, Ts)
@@ -115,8 +108,9 @@ class Control:
         self.rate_control(quad)
 
         # Mixer 电机混合器 -> 根据计算出的推力和角速度控制输入，计算四个电机的转速命令w_cmd
-        # ---------------------------
         self.w_cmd = mixerFM(quad, norm(self.thrust_sp), self.rateCtrl)
+
+        return self.w_cmd
 
     def z_pos_control(self, quad):
         # z方向的位置误差
@@ -147,7 +141,7 @@ class Control:
         # z方向的期望推力
         thrust_z_sp = (vel_P_gain[2] * vel_z_error -
                        vel_D_gain[2] * quad.vel_dot[2] +
-                       quad.params["mB"] * (self.acc_sp[2] - quad.params["g"]) +
+                       quad.params["m"] * (self.acc_sp[2] - quad.params["g"]) +
                        self.thr_int[2])
 
         # 推力范围
@@ -172,7 +166,7 @@ class Control:
         # xy方向的期望推力
         thrust_xy_sp = (vel_P_gain[0:2] * vel_xy_error -
                         vel_D_gain[0:2] * quad.vel_dot[0:2] +
-                        quad.params["mB"] * (self.acc_sp[0:2]) +
+                        quad.params["m"] * (self.acc_sp[0:2]) +
                         self.thr_int[0:2])
 
         # 推力饱和：基于最大倾斜角度和当前Z轴推力，计算水平方向上允许的最大推力，并进行饱和处理
@@ -194,7 +188,7 @@ class Control:
     def thrustToAttitude(self):
         """根据计算出的期望推力和期望偏航角来确定四旋翼飞行器期望的姿态"""
 
-        yaw_sp = self.eul_sp[2]  # 期望偏航角提取
+        yaw_sp = self.psi_sp  # 期望偏航角提取
         body_z = -vectNormalize(self.thrust_sp)
         y_C = np.array([-sin(yaw_sp), cos(yaw_sp), 0.0])
         body_x = np.cross(y_C, body_z)
