@@ -294,9 +294,12 @@ class AttitudeMPC:
         # 动力学模型，获取xyz角速度和角加速度
         f = lambda x_, u_: ca.vertcat(*[
             x_[3], x_[4], x_[5],  # dotphi, dotthe, dotpsi
-            (x_[4] * x_[5] * (self.quad.params['Iy'] - self.quad.params['Iz']) + self.quad.params['dxm'] * u_[0]) / self.quad.params['Ix'],  # ddotphi
-            (x_[3] * x_[5] * (self.quad.params['Iz'] - self.quad.params['Ix']) + self.quad.params['dxm'] * u_[1]) / self.quad.params['Iy'],  # ddotthe
-            (x_[3] * x_[4] * (self.quad.params['Ix'] - self.quad.params['Iy']) + u_[2]) / self.quad.params['Iz'],  # ddotpsi
+            (x_[4] * x_[5] * (self.quad.params['Iy'] - self.quad.params['Iz']) + self.quad.params['dxm'] * u_[0]) /
+            self.quad.params['Ix'],  # ddotphi
+            (x_[3] * x_[5] * (self.quad.params['Iz'] - self.quad.params['Ix']) + self.quad.params['dxm'] * u_[1]) /
+            self.quad.params['Iy'],  # ddotthe
+            (x_[3] * x_[4] * (self.quad.params['Ix'] - self.quad.params['Iy']) + u_[2]) / self.quad.params['Iz'],
+            # ddotpsi
         ])
 
         # 优化器的参数：期望控制输入和期望状态
@@ -326,9 +329,12 @@ class AttitudeMPC:
         self.opti.subject_to(self.opti.bounded(self.quad.params['min_dthe'], dthe, self.quad.params['max_dthe']))
         self.opti.subject_to(self.opti.bounded(self.quad.params['min_dpsi'], dpsi, self.quad.params['max_dpsi']))
 
-        self.opti.subject_to(self.opti.bounded(self.quad.params['min_tau_phi'], tau_phi, self.quad.params['max_tau_phi']))
-        self.opti.subject_to(self.opti.bounded(self.quad.params['min_tau_the'], tau_the, self.quad.params['max_tau_the']))
-        self.opti.subject_to(self.opti.bounded(self.quad.params['min_tau_psi'], tau_psi, self.quad.params['max_tau_psi']))
+        self.opti.subject_to(
+            self.opti.bounded(self.quad.params['min_tau_phi'], tau_phi, self.quad.params['max_tau_phi']))
+        self.opti.subject_to(
+            self.opti.bounded(self.quad.params['min_tau_the'], tau_the, self.quad.params['max_tau_the']))
+        self.opti.subject_to(
+            self.opti.bounded(self.quad.params['min_tau_psi'], tau_psi, self.quad.params['max_tau_psi']))
 
         opts_setting = {'ipopt.max_iter': 2000,
                         'ipopt.print_level': 0,
@@ -363,8 +369,10 @@ class AttitudeMPC:
         ddpsi_ref_ = np.diff(dpsi_ref_)
         ddpsi_ref_ = np.concatenate((ddpsi_ref_[0], ddpsi_ref_), axis=None)
 
-        tau_phi_ref_ = (quad.params['Ix'] * ddphi_ref_ - dthe_ref_ * dpsi_ref_ * (quad.params['Iy'] - quad.params['Iy'])) / quad.params['dxm']
-        tau_the_ref_ = (quad.params['Iy'] * ddthe_ref_ - dphi_ref_ * dpsi_ref_ * (quad.params['Iz'] - quad.params['Ix'])) / quad.params['dxm']
+        tau_phi_ref_ = (quad.params['Ix'] * ddphi_ref_ - dthe_ref_ * dpsi_ref_ * (
+                    quad.params['Iy'] - quad.params['Iz'])) / quad.params['dxm']
+        tau_the_ref_ = (quad.params['Iy'] * ddthe_ref_ - dphi_ref_ * dpsi_ref_ * (
+                    quad.params['Iz'] - quad.params['Ix'])) / quad.params['dxm']
         tau_psi_ref_ = quad.params['Iz'] * ddpsi_ref_ - dphi_ref_ * dthe_ref_ * (quad.params['Ix'] - quad.params['Iy'])
 
         x_ = np.array([phi_ref_, the_ref_, psi_ref_, dphi_ref_, dthe_ref_, dpsi_ref_]).T
@@ -396,3 +404,22 @@ class AttitudeMPC:
         x_m = sol.value(self.opt_states)
         self.u0, self.next_states = shift(u_res, x_m)
         return u_res[:, 0], u_res[:, 1], u_res[:, 2]
+
+
+class Control:
+    def __init__(self, quad, Ts, N):
+        self.al = AltitudeMPC(quad, T=Ts, N=N)
+        self.po = PositionMPC(quad, T=Ts, N=N)
+        self.at = AttitudeMPC(quad, T=Ts, N=N)
+
+    def controller(self, traj, quad, i, N):
+        # Solve altitude -> thrust
+        thrusts = self.al.solve(traj, quad, i, N)
+
+        # Solve position -> phid, thed
+        phids, theds = self.po.solve(traj, quad, i, N, thrusts)
+
+        # Solve attitude -> tau_phi, tau_the, tau_psi
+        tau_phis, tau_thes, tau_psis = self.at.solve(traj, quad, i, N, phids, theds)
+
+        return thrusts, tau_phis, tau_thes, tau_psis

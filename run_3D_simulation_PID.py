@@ -27,9 +27,8 @@ def main():
     pos_err_all = np.zeros([numTimeStep, 3])
     psi_err_all = np.zeros([numTimeStep, 1])
 
-    # Run Simulation
+    # 仿真循环
     t = Ti  # 将模拟的当前时间t设置为初始时间Ti
-    numTimeStep = int(Tf / Ts)  # 总的时间步
     for i in range(numTimeStep):
         sDes = traj.ref[i]
         cmd = ctrl.controller(quad, sDes, Ts)

@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 from quadFiles.quad import Quadrotor
 from trajFiles.traj import Trajectory
 from utils.animation import sameAxisAnimation
-from ctrlFiles.ctrl_mpc import AltitudeMPC, PositionMPC, AttitudeMPC
+from ctrlFiles.ctrl_mpc import Control
 from utils.plotting import errorPlotting
 
 
@@ -20,9 +20,7 @@ def main():
     quad = Quadrotor()
     traj = Trajectory(Tf, Ts)
 
-    al = AltitudeMPC(quad, T=Ts, N=N)
-    po = PositionMPC(quad, T=Ts, N=N)
-    at = AttitudeMPC(quad, T=Ts, N=N)
+    ctrl = Control(quad, Ts, N)
 
     numTimeStep = int(Tf / Ts)
     t_all = np.zeros(numTimeStep)
@@ -35,14 +33,7 @@ def main():
     for i in range(numTimeStep):
         print(i)
 
-        # Solve altitude -> thrust
-        thrusts = al.solve(traj, quad, i, N)
-
-        # Solve position -> phid, thed
-        phids, theds = po.solve(traj, quad, i, N, thrusts)
-
-        # Solve attitude -> tau_phi, tau_the, tau_psi
-        tau_phis, tau_thes, tau_psis = at.solve(traj, quad, i, N, phids, theds)
+        thrusts, tau_phis, tau_thes, tau_psis = ctrl.controller(traj, quad, i, N)
 
         quad.update_mpc(thrusts[0], tau_phis[0], tau_thes[0], tau_psis[0], Ts)
 
