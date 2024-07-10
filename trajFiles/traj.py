@@ -7,6 +7,7 @@ class Trajectory:
         self.sim_time = sim_time
         self.dt = dt
 
+        self.desiredTrajectory()
         # self.ref = self.desiredTrajectory()
         self.ref = self.generateTrajectory()
 

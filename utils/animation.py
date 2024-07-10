@@ -9,7 +9,7 @@ from utils.rotationConversion import *
 numFrames = 8
 
 
-def sameAxisAnimation(t_all, pos_all, quat_all, sDes_tr_all, Ts, ifsave=False):
+def sameAxisAnimation(t_all, waypoints, pos_all, quat_all, sDes_tr_all, Ts, ifsave=False):
     # 从pos_all数组中提取所有时间步的x，y，z坐标
     x = pos_all[:, 0]
     y = pos_all[:, 1]
@@ -20,14 +20,14 @@ def sameAxisAnimation(t_all, pos_all, quat_all, sDes_tr_all, Ts, ifsave=False):
     yDes = sDes_tr_all[:, 1]
     zDes = sDes_tr_all[:, 2]
 
-    # # 提取所有航点的x，y，z坐标
-    # x_wp = waypoints[:, 0]
-    # y_wp = waypoints[:, 1]
-    # z_wp = waypoints[:, 2]
+    # 提取所有航点的x，y，z坐标
+    x_wp = waypoints[:, 0]
+    y_wp = waypoints[:, 1]
+    z_wp = waypoints[:, 2]
 
     z = -z  # 如果坐标系是"NED"，这行代码将所有的z坐标取反，使其符合"NED"坐标系中z轴向下的约定
     zDes = -zDes  # 取反期望轨迹中的z坐标
-    # z_wp = -z_wp  # 取反所有航点的z坐标
+    z_wp = -z_wp  # 取反所有航点的z坐标
 
     # 创建一个新的matplotlib图形对象fig。这是一个容器，用于存放所有的绘图元素
     fig = plt.figure()
@@ -65,7 +65,7 @@ def sameAxisAnimation(t_all, pos_all, quat_all, sDes_tr_all, Ts, ifsave=False):
     yawTrajType = 'Follow'
 
     # 使用ax.scatter在坐标轴上显示 航点
-    # ax.scatter(x_wp, y_wp, z_wp, color='green', alpha=1, marker='o', s=25)
+    ax.scatter(x_wp, y_wp, z_wp, color='green', alpha=1, marker='o', s=25)
     # 使用ax.plot在坐标轴上显示 期望轨迹线
     ax.plot(xDes, yDes, zDes, ':', lw=1.3, color='green')
 

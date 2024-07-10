@@ -47,6 +47,7 @@ def main():
 
     # 动画
     sameAxisAnimation(t_all,
+                      traj.wps,
                       pos_all,
                       quat_all,
                       traj.ref,
