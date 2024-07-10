@@ -14,9 +14,9 @@ deg2rad = pi / 180.0
 # ---------------------------
 
 # Position P gains 位置的P增益
-Py = 1.0
+Py = 0.8
 Px = Py
-Pz = 1.0
+Pz = 1.6
 
 pos_P_gain = np.array([Px, Py, Pz])
 
