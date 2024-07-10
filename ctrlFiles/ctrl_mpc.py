@@ -147,8 +147,8 @@ class PositionMPC:
 
         # 控制变量: 俯仰角，滚动角
         self.opt_controls = self.opti.variable(self.N, 2)
-        phid = self.opt_controls[:, 0]
-        thed = self.opt_controls[:, 1]
+        phi = self.opt_controls[:, 0]
+        the = self.opt_controls[:, 1]
 
         # 状态变量: 位置(x,y) 速度(dx,dy)
         self.opt_states = self.opti.variable(self.N + 1, 4)
@@ -190,8 +190,8 @@ class PositionMPC:
         self.opti.subject_to(self.opti.bounded(self.quad.params['min_dx'], dx, self.quad.params['max_dx']))
         self.opti.subject_to(self.opti.bounded(self.quad.params['min_dy'], dy, self.quad.params['max_dy']))
 
-        self.opti.subject_to(self.opti.bounded(self.quad.params['min_phi'], phid, self.quad.params['max_phi']))
-        self.opti.subject_to(self.opti.bounded(self.quad.params['min_the'], thed, self.quad.params['max_the']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_phi'], phi, self.quad.params['max_phi']))
+        self.opti.subject_to(self.opti.bounded(self.quad.params['min_the'], the, self.quad.params['max_the']))
 
         opts_setting = {'ipopt.max_iter': 2000,
                         'ipopt.print_level': 0,
@@ -346,10 +346,10 @@ class AttitudeMPC:
 
         self.opti.solver('ipopt', opts_setting)
 
-    def solve(self, traj, quad, idx, N_, phids, theds):
+    def solve(self, traj, quad, idx, N_, phis, thes):
         """首先获取无人机姿态的期望状态和控制，然后优化控制"""
-        phi_ref_ = phids
-        the_ref_ = theds
+        phi_ref_ = phis
+        the_ref_ = thes
 
         psi_ref_ = traj.psi_ref[idx:(idx + N_)]
         length = len(psi_ref_)
@@ -418,7 +418,7 @@ class Control:
         # Solve altitude -> thrust
         thrusts = self.al.solve(traj, quad, i, N)
 
-        # Solve position -> phid, thed
+        # Solve position -> phi, the
         phis, thes = self.po.solve(traj, quad, i, N, thrusts)
 
         # Solve attitude -> tau_phi, tau_the, tau_psi
