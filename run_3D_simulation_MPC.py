@@ -1,12 +1,12 @@
 import time
 import numpy as np
-from matplotlib import pyplot as plt
-from quadFiles.quad import Quadrotor
+import matplotlib.pyplot as plt
 from trajFiles.traj import Trajectory
-from utils.animation import sameAxisAnimation
 from ctrlFiles.ctrl_mpc import Control
+from quadFiles.quad import Quadrotor
 from utils.plotting import errorPlotting
 from utils.windModel import Wind
+from utils.animation import sameAxisAnimation
 
 
 def main():

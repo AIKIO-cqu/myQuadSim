@@ -1,6 +1,6 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
-import time
 from trajFiles.traj import Trajectory
 from ctrlFiles.ctrl_pid import Control
 from quadFiles.quad import Quadrotor
